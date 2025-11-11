@@ -18,8 +18,9 @@ MOD_PIN = st.secrets.get("MOD_PIN", "1234")
 def get_conn():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA busy_timeout=3000;")
+    conn.execute("PRAGMA busy_timeout=5000;")  # espera até 5s por lock
     return conn
+
 
 def init_db():
     conn = get_conn()
@@ -53,6 +54,7 @@ def init_db():
     """)
     conn.commit()
 
+
 def set_setting(key, value):
     conn = get_conn()
     conn.execute(
@@ -62,11 +64,13 @@ def set_setting(key, value):
     )
     conn.commit()
 
+
 def get_setting(key, default=""):
     conn = get_conn()
     cur = conn.execute("SELECT value FROM settings WHERE key=?", (key,))
     row = cur.fetchone()
     return row[0] if row else default
+
 
 def get_or_create_player(name):
     conn = get_conn()
@@ -80,6 +84,7 @@ def get_or_create_player(name):
     row = cur.fetchone()
     return row[0] if row else None
 
+
 def upsert_facts(player_id, facts):
     conn = get_conn()
     conn.execute("DELETE FROM facts WHERE player_id=?", (player_id,))
@@ -89,10 +94,12 @@ def upsert_facts(player_id, facts):
             conn.execute("INSERT INTO facts(player_id, text) VALUES(?,?)", (player_id, f))
     conn.commit()
 
+
 def list_other_players(player_id):
     conn = get_conn()
     cur = conn.execute("SELECT id, name FROM players WHERE id != ? ORDER BY name", (player_id,))
     return cur.fetchall()
+
 
 @st.cache_data(ttl=3)
 def list_all_facts_excluding_self(player_id):
@@ -110,24 +117,34 @@ def list_all_facts_excluding_self(player_id):
         facts = sorted(facts, key=lambda x: st.session_state["facts_order"].index(x[0]))
     return facts
 
+
+# =====================================================
+# NOVO: Função robusta de gravação de respostas
+# =====================================================
 def register_guess(guesser_id, fact_id, guessed_player_id):
     now = datetime.utcnow().isoformat()
     conn = get_conn()
-    cur = conn.execute(
-        "SELECT id FROM guesses WHERE guesser_id=? AND fact_id=?",
-        (guesser_id, fact_id)
-    )
-    if cur.fetchone():
-        conn.execute(
-            "UPDATE guesses SET guessed_player_id=?, created_at=? WHERE guesser_id=? AND fact_id=?",
-            (guessed_player_id, now, guesser_id, fact_id)
+    try:
+        cur = conn.execute(
+            "SELECT id FROM guesses WHERE guesser_id=? AND fact_id=?",
+            (guesser_id, fact_id)
         )
-    else:
-        conn.execute(
-            "INSERT INTO guesses(guesser_id,fact_id,guessed_player_id,created_at) VALUES(?,?,?,?)",
-            (guesser_id, fact_id, guessed_player_id, now)
-        )
-    conn.commit()
+        if cur.fetchone():
+            conn.execute(
+                "UPDATE guesses SET guessed_player_id=?, created_at=? WHERE guesser_id=? AND fact_id=?",
+                (guessed_player_id, now, guesser_id, fact_id)
+            )
+        else:
+            conn.execute(
+                "INSERT OR IGNORE INTO guesses(guesser_id,fact_id,guessed_player_id,created_at) VALUES(?,?,?,?)",
+                (guesser_id, fact_id, guessed_player_id, now)
+            )
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        st.error(f"⚠️ O banco está ocupado, tente novamente em alguns segundos.")
+    except Exception as e:
+        st.error(f"Erro ao registrar resposta: {e}")
+
 
 def leaderboard(limit=5):
     conn = get_conn()
@@ -171,7 +188,6 @@ def page_player():
 
     if st.session_state["player_id"] is None:
         st.stop()
-
     pid = st.session_state["player_id"]
 
     if not st.session_state["facts_loaded"]:
@@ -218,8 +234,11 @@ def page_player():
         cur = conn.execute("SELECT fact_id FROM guesses WHERE guesser_id=?", (pid,))
         answered = {row[0] for row in cur.fetchall()}
 
-        with open("style.css") as f:
-            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+        try:
+            with open("style.css") as f:
+                st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+        except FileNotFoundError:
+            st.warning("⚠️ Arquivo de estilo não encontrado (style.css).")
 
         for fact_id, fact_text, _ in facts:
             answered_flag = fact_id in answered
