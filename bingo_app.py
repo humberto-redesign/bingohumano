@@ -9,9 +9,9 @@ import pandas as pd
 # CONFIGURAÇÕES
 # =====================================================
 DB_PATH = "bingo.db"
-APP_TITLE = "Bingo Humano Digital 3.0.5"
+APP_TITLE = "RDN Integração"
 MOD_PIN = st.secrets.get("MOD_PIN", "1234")
-VERSION = "3.0.5"
+VERSION = "3.0.6"
 
 # =====================================================
 # BANCO DE DADOS
@@ -25,10 +25,7 @@ def get_conn():
 def init_db():
     conn = get_conn()
     conn.executescript("""
-        CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        );
+        CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
         CREATE TABLE IF NOT EXISTS players (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT UNIQUE NOT NULL,
@@ -99,7 +96,7 @@ def list_other_players(player_id):
     return cur.fetchall()
 
 # =====================================================
-# LISTAGEM INTELIGENTE DE CURIOSIDADES (dinâmica)
+# LISTAGEM INTELIGENTE DE CURIOSIDADES
 # =====================================================
 def list_all_facts_excluding_self(player_id):
     conn = get_conn()
@@ -152,7 +149,7 @@ def register_guess(guesser_id, fact_id, guessed_player_id):
         st.error(f"Erro ao registrar resposta: {e}")
 
 # =====================================================
-# RANKING (baseado em acertos)
+# RANKING (por acertos)
 # =====================================================
 def leaderboard(limit=5):
     conn = get_conn()
@@ -172,16 +169,26 @@ def leaderboard(limit=5):
 # INTERFACE JOGADOR
 # =====================================================
 def page_player():
-    st.title("🎯 Bingo Humano Digital — Jogador")
+    st.title("🎯 RDN Integração")
+    st.markdown("### Modo do Jogador")
 
     st.session_state.setdefault("player_name", "")
     st.session_state.setdefault("player_id", None)
     st.session_state.setdefault("facts_loaded", False)
     st.session_state.setdefault("ready_to_play", False)
 
+    if st.session_state.get("player_name"):
+        st.markdown(f"**👤 Jogador:** {st.session_state['player_name']}")
+
     started = get_setting("started", "0") == "1"
     finished = get_setting("finished", "0") == "1"
 
+    # -------- Encerramento do jogo --------
+    if finished:
+        st.warning("⛔ O jogo foi encerrado pelo moderador.")
+        st.stop()
+
+    # -------- Cadastro inicial --------
     if st.session_state["player_id"] is None:
         with st.form("frm_name"):
             name = st.text_input("Digite seu nome completo")
@@ -200,6 +207,7 @@ def page_player():
         st.stop()
     pid = st.session_state["player_id"]
 
+    # -------- Cadastro das curiosidades --------
     if not st.session_state["facts_loaded"]:
         st.info("✍️ Cadastre 3 curiosidades sobre você.")
         with st.form("frm_facts"):
@@ -220,12 +228,14 @@ def page_player():
                     st.rerun()
         st.stop()
 
+    # -------- Espera pelo início --------
     if not started and st.session_state["facts_loaded"]:
         st.info("⏳ Aguardando o moderador iniciar o jogo...")
         time.sleep(5)
         st.rerun()
 
-    if started and not st.session_state["ready_to_play"] and not finished:
+    # -------- Jogo em andamento --------
+    if started and not st.session_state["ready_to_play"]:
         st.markdown("<div class='banner'>🚀 O moderador iniciou o jogo! Clique abaixo para começar.</div>", unsafe_allow_html=True)
         if st.button("🎯 Iniciar o Jogo!", use_container_width=True):
             st.session_state["ready_to_play"] = True
@@ -233,7 +243,7 @@ def page_player():
             st.rerun()
         st.stop()
 
-    if started and st.session_state["ready_to_play"] and not finished:
+    if started and st.session_state["ready_to_play"]:
         st.success("🟢 O jogo está em andamento!")
         facts = list_all_facts_excluding_self(pid)
         others = list_other_players(pid)
@@ -265,18 +275,11 @@ def page_player():
                 st.toast("Resposta registrada! 👏")
                 st.rerun()
 
-    if finished:
-        st.warning("⛔ O jogo foi encerrado pelo moderador.")
-        st.subheader("🏆 Top 5 jogadores")
-        data = leaderboard()
-        for i, (name, score) in enumerate(data, start=1):
-            st.markdown(f"<div class='rank rank{i}'>🥇 {name} — {score} acertos</div>", unsafe_allow_html=True)
-
 # =====================================================
 # INTERFACE MODERADOR
 # =====================================================
 def page_moderator():
-    st.title(f"🧭 Painel do Moderador — Bingo Humano (v{VERSION})")
+    st.title(f"🧭 Painel do Moderador — RDN Integração (v{VERSION})")
     st.caption(f"Versão do código: {VERSION}")
 
     pin = st.text_input("PIN do moderador", type="password")
@@ -313,44 +316,6 @@ def page_moderator():
             conn.commit()
             st.warning("Banco limpo.")
             st.rerun()
-
-    conn = get_conn()
-    total_players = conn.execute("SELECT COUNT(*) FROM players").fetchone()[0]
-    total_facts = conn.execute("SELECT COUNT(*) FROM facts").fetchone()[0]
-    total_guesses = conn.execute("SELECT COUNT(*) FROM guesses").fetchone()[0]
-
-    colA, colB, colC = st.columns(3)
-    colA.metric("Participantes", total_players)
-    colB.metric("Curiosidades", total_facts)
-    colC.metric("Respostas", total_guesses)
-
-    st.subheader("📋 Jogadores e Curiosidades Cadastradas")
-    df_players = pd.read_sql_query("""
-        SELECT p.name AS Jogador, COUNT(f.id) AS Curiosidades
-        FROM players p
-        LEFT JOIN facts f ON p.id = f.player_id
-        GROUP BY p.id
-        ORDER BY p.name
-    """, conn)
-    st.dataframe(df_players, use_container_width=True)
-
-    st.subheader("🎯 Jogadores e Respostas Dadas (Engajamento e Acertos)")
-    df_guesses = pd.read_sql_query("""
-        SELECT p.name AS Jogador,
-               COUNT(g.id) AS Respostas,
-               SUM(CASE WHEN g.guessed_player_id = f.player_id THEN 1 ELSE 0 END) AS Corretas
-        FROM players p
-        LEFT JOIN guesses g ON p.id = g.guesser_id
-        LEFT JOIN facts f ON g.fact_id = f.id
-        GROUP BY p.id
-        ORDER BY Corretas DESC, Respostas DESC, p.name
-    """, conn)
-    st.dataframe(df_guesses, use_container_width=True)
-
-    st.subheader("🏆 Ranking Top 5 (por acertos)")
-    data = leaderboard()
-    for i, (name, score) in enumerate(data, start=1):
-        st.markdown(f"<div class='rank rank{i}'>🥇 {name} — {score} acertos</div>", unsafe_allow_html=True)
 
 # =====================================================
 # MAIN
