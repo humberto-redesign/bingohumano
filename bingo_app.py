@@ -1,29 +1,29 @@
+import streamlit as st
 import sqlite3
 import random
 from datetime import datetime
-import streamlit as st
+import time
+import pandas as pd
 
 # =====================================================
 # CONFIGURAÇÕES
 # =====================================================
 DB_PATH = "bingo.db"
-APP_TITLE = "Bingo Humano Digital 2.0"
-MOD_PIN = st.secrets.get("MOD_PIN", "3535")
+APP_TITLE = "Bingo Humano Digital 3.0"
+MOD_PIN = st.secrets.get("MOD_PIN", "1234")
 
 # =====================================================
 # BANCO DE DADOS
 # =====================================================
-@st.cache_resource
 def get_conn():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA busy_timeout=3000;")
     return conn
-
 
 def init_db():
     conn = get_conn()
-    conn.executescript(
-        """
+    conn.executescript("""
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT
@@ -50,10 +50,8 @@ def init_db():
             FOREIGN KEY(fact_id) REFERENCES facts(id),
             FOREIGN KEY(guessed_player_id) REFERENCES players(id)
         );
-        """
-    )
+    """)
     conn.commit()
-
 
 def set_setting(key, value):
     conn = get_conn()
@@ -64,31 +62,25 @@ def set_setting(key, value):
     )
     conn.commit()
 
-
 def get_setting(key, default=""):
     conn = get_conn()
     cur = conn.execute("SELECT value FROM settings WHERE key=?", (key,))
     row = cur.fetchone()
     return row[0] if row else default
 
-
-def get_or_create_player(name: str):
+def get_or_create_player(name):
     conn = get_conn()
     now = datetime.utcnow().isoformat()
     try:
-        conn.execute(
-            "INSERT INTO players(name, created_at) VALUES(?, ?)",
-            (name.strip(), now),
-        )
+        conn.execute("INSERT INTO players(name, created_at) VALUES(?,?)", (name, now))
         conn.commit()
     except sqlite3.IntegrityError:
         pass
-    cur = conn.execute("SELECT id FROM players WHERE name=?", (name.strip(),))
+    cur = conn.execute("SELECT id FROM players WHERE name=?", (name,))
     row = cur.fetchone()
     return row[0] if row else None
 
-
-def upsert_facts(player_id: int, facts: list[str]):
+def upsert_facts(player_id, facts):
     conn = get_conn()
     conn.execute("DELETE FROM facts WHERE player_id=?", (player_id,))
     for f in facts:
@@ -97,80 +89,72 @@ def upsert_facts(player_id: int, facts: list[str]):
             conn.execute("INSERT INTO facts(player_id, text) VALUES(?,?)", (player_id, f))
     conn.commit()
 
-
-def list_other_players(player_id: int):
+def list_other_players(player_id):
     conn = get_conn()
-    cur = conn.execute(
-        "SELECT id, name FROM players WHERE id != ? ORDER BY name", (player_id,)
-    )
+    cur = conn.execute("SELECT id, name FROM players WHERE id != ? ORDER BY name", (player_id,))
     return cur.fetchall()
 
-
-def list_all_facts_excluding_self(player_id: int):
+@st.cache_data(ttl=3)
+def list_all_facts_excluding_self(player_id):
     conn = get_conn()
-    cur = conn.execute(
-        """
+    cur = conn.execute("""
         SELECT f.id, f.text, f.player_id
         FROM facts f
         WHERE f.player_id != ?
-        """,
-        (player_id,),
-    )
+    """, (player_id,))
     facts = cur.fetchall()
-    random.shuffle(facts)
+    if "facts_order" not in st.session_state:
+        random.shuffle(facts)
+        st.session_state["facts_order"] = [f[0] for f in facts]
+    else:
+        facts = sorted(facts, key=lambda x: st.session_state["facts_order"].index(x[0]))
     return facts
 
-
-def player_score(player_id: int) -> int:
-    conn = get_conn()
-    cur = conn.execute(
-        "SELECT COUNT(*) FROM guesses WHERE guesser_id=?", (player_id,)
-    )
-    return cur.fetchone()[0]
-
-
-def register_guess(guesser_id: int, fact_id: int, guessed_player_id: int):
+def register_guess(guesser_id, fact_id, guessed_player_id):
     now = datetime.utcnow().isoformat()
     conn = get_conn()
-    try:
-        conn.execute(
-            "INSERT INTO guesses(guesser_id,fact_id,guessed_player_id,created_at)"
-            " VALUES(?,?,?,?)",
-            (guesser_id, fact_id, guessed_player_id, now),
-        )
-        conn.commit()
-    except sqlite3.IntegrityError:
-        pass
-
-
-def leaderboard():
-    conn = get_conn()
     cur = conn.execute(
-        """
-        SELECT p.name, COUNT(g.id) as guesses
+        "SELECT id FROM guesses WHERE guesser_id=? AND fact_id=?",
+        (guesser_id, fact_id)
+    )
+    if cur.fetchone():
+        conn.execute(
+            "UPDATE guesses SET guessed_player_id=?, created_at=? WHERE guesser_id=? AND fact_id=?",
+            (guessed_player_id, now, guesser_id, fact_id)
+        )
+    else:
+        conn.execute(
+            "INSERT INTO guesses(guesser_id,fact_id,guessed_player_id,created_at) VALUES(?,?,?,?)",
+            (guesser_id, fact_id, guessed_player_id, now)
+        )
+    conn.commit()
+
+def leaderboard(limit=5):
+    conn = get_conn()
+    cur = conn.execute("""
+        SELECT p.name, COUNT(g.id) as score
         FROM players p
         LEFT JOIN guesses g ON g.guesser_id = p.id
         GROUP BY p.id
-        ORDER BY guesses DESC, p.name ASC
-        """
-    )
+        ORDER BY score DESC, p.name ASC
+        LIMIT ?
+    """, (limit,))
     return cur.fetchall()
 
-
 # =====================================================
-# INTERFACE: JOGADOR
+# INTERFACE JOGADOR
 # =====================================================
 def page_player():
-    st.title("🎯 Bingo Humano Digital 2.0 — Jogador")
+    st.title("🎯 Bingo Humano Digital — Jogador")
 
     st.session_state.setdefault("player_name", "")
     st.session_state.setdefault("player_id", None)
+    st.session_state.setdefault("facts_loaded", False)
+    st.session_state.setdefault("ready_to_play", False)
 
-    # Sincronização de status do jogo
     started = get_setting("started", "0") == "1"
     finished = get_setting("finished", "0") == "1"
 
-    # Etapa 1 — Registro do jogador
     if st.session_state["player_id"] is None:
         with st.form("frm_name"):
             name = st.text_input("Digite seu nome completo")
@@ -190,63 +174,80 @@ def page_player():
 
     pid = st.session_state["player_id"]
 
-    # Etapa 2 — Cadastro das curiosidades
-    if not started:
-        st.info("⏳ Aguarde o moderador iniciar o jogo.")
+    if not st.session_state["facts_loaded"]:
+        st.info("✍️ Cadastre 3 curiosidades sobre você.")
         with st.form("frm_facts"):
-            st.write("✍️ Cadastre 5 curiosidades sobre você:")
-            facts = [st.text_input(f"Curiosidade {i+1}") for i in range(5)]
-            ok = st.form_submit_button("Salvar minhas 5 frases")
+            facts = [st.text_input(f"Curiosidade {i+1}") for i in range(3)]
+            ok = st.form_submit_button("Salvar minhas 3 frases")
         if ok:
             if any(not f.strip() for f in facts):
-                st.error("Por favor, preencha as 5 frases.")
+                st.error("Por favor, preencha as 3 frases.")
             else:
                 upsert_facts(pid, facts)
-                st.success("✅ Frases salvas com sucesso. Aguarde o início do jogo.")
+                st.session_state["facts_loaded"] = True
+                st.success("✅ Frases salvas!")
+                if started:
+                    st.session_state["ready_to_play"] = True
+                    st.toast("O jogo já está em andamento! Boa sorte 🎯")
+                    st.rerun()
+                else:
+                    st.rerun()
         st.stop()
 
-    # Etapa 3 — Jogo em andamento
-    if started and not finished:
-        st.success("🟢 O jogo está em andamento! Boa sorte!")
+    if not started and st.session_state["facts_loaded"]:
+        st.info("⏳ Aguardando o moderador iniciar o jogo...")
+        time.sleep(5)
+        st.rerun()
+
+    if started and not st.session_state["ready_to_play"] and not finished:
+        st.markdown("<div class='banner'>🚀 O moderador iniciou o jogo! Clique abaixo para começar.</div>", unsafe_allow_html=True)
+        if st.button("🎯 Iniciar o Jogo!", use_container_width=True):
+            st.session_state["ready_to_play"] = True
+            st.toast("Boa sorte! O jogo começou 🎉")
+            st.rerun()
+        st.stop()
+
+    if started and st.session_state["ready_to_play"] and not finished:
+        st.success("🟢 O jogo está em andamento!")
         facts = list_all_facts_excluding_self(pid)
         others = list_other_players(pid)
         names = [n for _, n in others]
         name_to_id = {n: i for i, n in others}
 
+        conn = get_conn()
+        cur = conn.execute("SELECT fact_id FROM guesses WHERE guesser_id=?", (pid,))
+        answered = {row[0] for row in cur.fetchall()}
+
+        with open("style.css") as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
         for fact_id, fact_text, _ in facts:
+            answered_flag = fact_id in answered
+            card_class = "card answered" if answered_flag else "card"
+            st.markdown(f"<div class='{card_class}'><b>{fact_text}</b></div>", unsafe_allow_html=True)
             with st.form(f"frm_{fact_id}"):
-                st.markdown(f"**{fact_text}**")
-                guess_name = st.selectbox(
-                    "Quem é essa pessoa?", [""] + names, index=0
-                )
+                guess_name = st.selectbox("Quem é essa pessoa?", [""] + names, key=f"guess_{fact_id}")
                 submit = st.form_submit_button("Confirmar resposta")
             if submit:
                 if not guess_name:
                     st.warning("Selecione um nome para confirmar.")
                     st.stop()
                 register_guess(pid, fact_id, name_to_id[guess_name])
-                st.info("Resposta registrada.")
+                st.toast("Resposta registrada! 👏")
                 st.rerun()
 
-        st.caption("Você pode pular perguntas e responder em qualquer ordem.")
-        st.caption("As respostas corretas serão reveladas ao final.")
-
-    # Etapa 4 — Jogo encerrado
     if finished:
         st.warning("⛔ O jogo foi encerrado pelo moderador.")
-        st.markdown("### 🏆 Resultado parcial:")
-        score = player_score(pid)
-        st.metric("Respostas registradas", score)
-        st.info("O moderador anunciará o vencedor em breve.")
-        st.stop()
-
+        st.subheader("🏆 Top 5 jogadores")
+        data = leaderboard()
+        for i, (name, score) in enumerate(data, start=1):
+            st.markdown(f"<div class='rank rank{i}'>🥇 {name} — {score} pontos</div>", unsafe_allow_html=True)
 
 # =====================================================
-# INTERFACE: MODERADOR
+# INTERFACE MODERADOR
 # =====================================================
 def page_moderator():
-    st.set_page_config(layout="wide")
-    st.title("🧭 Painel do Moderador — Bingo Humano Digital 2.0")
+    st.title("🧭 Painel do Moderador — Bingo Humano")
 
     pin = st.text_input("PIN do moderador", type="password")
     if pin != MOD_PIN:
@@ -262,7 +263,7 @@ def page_moderator():
             if st.button("🚀 Iniciar jogo"):
                 set_setting("started", "1")
                 set_setting("finished", "0")
-                st.success("Jogo iniciado!")
+                st.toast("O jogo foi iniciado!")
                 st.rerun()
         else:
             st.success("🟢 Jogo em andamento")
@@ -278,14 +279,11 @@ def page_moderator():
     with col4:
         if st.button("🧹 Resetar tudo"):
             conn = get_conn()
-            conn.executescript(
-                "DELETE FROM guesses; DELETE FROM facts; DELETE FROM players; DELETE FROM settings;"
-            )
+            conn.executescript("DELETE FROM guesses; DELETE FROM facts; DELETE FROM players; DELETE FROM settings;")
             conn.commit()
-            st.warning("Banco limpo. Novo jogo pode começar.")
+            st.warning("Banco limpo.")
             st.rerun()
 
-    # Métricas
     conn = get_conn()
     total_players = conn.execute("SELECT COUNT(*) FROM players").fetchone()[0]
     total_facts = conn.execute("SELECT COUNT(*) FROM facts").fetchone()[0]
@@ -293,32 +291,33 @@ def page_moderator():
 
     colA, colB, colC = st.columns(3)
     colA.metric("Participantes", total_players)
-    colB.metric("Frases cadastradas", total_facts)
-    colC.metric("Respostas registradas", total_guesses)
+    colB.metric("Curiosidades", total_facts)
+    colC.metric("Respostas", total_guesses)
 
-    st.divider()
-    st.subheader("🏆 Ranking de acertos")
+    st.subheader("📋 Jogadores e Curiosidades Cadastradas")
+    df_players = pd.read_sql_query("""
+        SELECT p.name AS Jogador, COUNT(f.id) AS Curiosidades
+        FROM players p
+        LEFT JOIN facts f ON p.id = f.player_id
+        GROUP BY p.id
+        ORDER BY p.name
+    """, conn)
+    st.dataframe(df_players, use_container_width=True)
+
+    st.subheader("🎯 Jogadores e Respostas Dadas (Engajamento)")
+    df_guesses = pd.read_sql_query("""
+        SELECT p.name AS Jogador, COUNT(g.id) AS Respostas
+        FROM players p
+        LEFT JOIN guesses g ON p.id = g.guesser_id
+        GROUP BY p.id
+        ORDER BY Respostas DESC, p.name
+    """, conn)
+    st.dataframe(df_guesses, use_container_width=True)
+
+    st.subheader("🏆 Ranking Top 5")
     data = leaderboard()
-    if data:
-        st.table({"Participante": [d[0] for d in data], "Respostas": [int(d[1]) for d in data]})
-    else:
-        st.write("Nenhum participante ainda.")
-
-    st.divider()
-    st.subheader("📋 Status dos jogadores")
-    cur = conn.execute(
-        """
-        SELECT p.name,
-               (SELECT COUNT(*) FROM facts f WHERE f.player_id=p.id) AS frases,
-               (SELECT COUNT(*) FROM guesses g WHERE g.guesser_id=p.id) AS respostas
-        FROM players p ORDER BY p.name
-        """
-    )
-    st.dataframe(
-        [{"Nome": r[0], "Frases": r[1], "Respostas": r[2]} for r in cur.fetchall()],
-        use_container_width=True,
-    )
-
+    for i, (name, score) in enumerate(data, start=1):
+        st.markdown(f"<div class='rank rank{i}'>🥇 {name} — {score} pontos</div>", unsafe_allow_html=True)
 
 # =====================================================
 # MAIN
@@ -326,18 +325,12 @@ def page_moderator():
 def main():
     st.set_page_config(page_title=APP_TITLE, page_icon="🎯")
     init_db()
-
     params = st.query_params
-    if "mode" in params:
-        mode = params["mode"].lower()
-    else:
-        mode = "player"
-
+    mode = params["mode"].lower() if "mode" in params else "player"
     if mode == "moderator":
         page_moderator()
     else:
         page_player()
-
 
 if __name__ == "__main__":
     main()
