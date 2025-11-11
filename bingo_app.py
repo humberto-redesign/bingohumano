@@ -9,8 +9,9 @@ import pandas as pd
 # CONFIGURAÇÕES
 # =====================================================
 DB_PATH = "bingo.db"
-APP_TITLE = "Bingo Humano Digital 3.0"
+APP_TITLE = "Bingo Humano Digital 3.0.5"
 MOD_PIN = st.secrets.get("MOD_PIN", "1234")
+VERSION = "3.0.5"
 
 # =====================================================
 # BANCO DE DADOS
@@ -20,7 +21,6 @@ def get_conn():
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA busy_timeout=5000;")
     return conn
-
 
 def init_db():
     conn = get_conn()
@@ -54,7 +54,9 @@ def init_db():
     """)
     conn.commit()
 
-
+# =====================================================
+# CONFIGURAÇÕES GERAIS
+# =====================================================
 def set_setting(key, value):
     conn = get_conn()
     conn.execute(
@@ -64,13 +66,11 @@ def set_setting(key, value):
     )
     conn.commit()
 
-
 def get_setting(key, default=""):
     conn = get_conn()
     cur = conn.execute("SELECT value FROM settings WHERE key=?", (key,))
     row = cur.fetchone()
     return row[0] if row else default
-
 
 def get_or_create_player(name):
     conn = get_conn()
@@ -84,7 +84,6 @@ def get_or_create_player(name):
     row = cur.fetchone()
     return row[0] if row else None
 
-
 def upsert_facts(player_id, facts):
     conn = get_conn()
     conn.execute("DELETE FROM facts WHERE player_id=?", (player_id,))
@@ -94,12 +93,10 @@ def upsert_facts(player_id, facts):
             conn.execute("INSERT INTO facts(player_id, text) VALUES(?,?)", (player_id, f))
     conn.commit()
 
-
 def list_other_players(player_id):
     conn = get_conn()
     cur = conn.execute("SELECT id, name FROM players WHERE id != ? ORDER BY name", (player_id,))
     return cur.fetchall()
-
 
 # =====================================================
 # LISTAGEM INTELIGENTE DE CURIOSIDADES (dinâmica)
@@ -107,8 +104,6 @@ def list_other_players(player_id):
 def list_all_facts_excluding_self(player_id):
     conn = get_conn()
     total_facts = conn.execute("SELECT COUNT(*) FROM facts").fetchone()[0]
-
-    # Se o total mudou, recarrega
     if "facts_cache" not in st.session_state or st.session_state.get("facts_total") != total_facts:
         cur = conn.execute("""
             SELECT f.id, f.text, f.player_id
@@ -122,10 +117,8 @@ def list_all_facts_excluding_self(player_id):
         st.session_state["facts_order"] = [f[0] for f in facts]
     else:
         facts = st.session_state["facts_cache"]
-
     facts = sorted(facts, key=lambda x: st.session_state["facts_order"].index(x[0]))
     return facts
-
 
 # =====================================================
 # REGISTRO DE RESPOSTAS (robusto)
@@ -134,12 +127,10 @@ def register_guess(guesser_id, fact_id, guessed_player_id):
     now = datetime.utcnow().isoformat()
     conn = get_conn()
     try:
-        # Valida se o fact ainda existe
         cur = conn.execute("SELECT COUNT(*) FROM facts WHERE id=?", (fact_id,))
         if cur.fetchone()[0] == 0:
             st.warning("Essa curiosidade não existe mais (jogo atualizado). Recarregue a página.")
             return
-
         cur = conn.execute(
             "SELECT id FROM guesses WHERE guesser_id=? AND fact_id=?",
             (guesser_id, fact_id)
@@ -160,13 +151,17 @@ def register_guess(guesser_id, fact_id, guessed_player_id):
     except Exception as e:
         st.error(f"Erro ao registrar resposta: {e}")
 
-
+# =====================================================
+# RANKING (baseado em acertos)
+# =====================================================
 def leaderboard(limit=5):
     conn = get_conn()
     cur = conn.execute("""
-        SELECT p.name, COUNT(g.id) as score
+        SELECT p.name,
+               SUM(CASE WHEN g.guessed_player_id = f.player_id THEN 1 ELSE 0 END) AS score
         FROM players p
         LEFT JOIN guesses g ON g.guesser_id = p.id
+        LEFT JOIN facts f ON g.fact_id = f.id
         GROUP BY p.id
         ORDER BY score DESC, p.name ASC
         LIMIT ?
@@ -275,13 +270,14 @@ def page_player():
         st.subheader("🏆 Top 5 jogadores")
         data = leaderboard()
         for i, (name, score) in enumerate(data, start=1):
-            st.markdown(f"<div class='rank rank{i}'>🥇 {name} — {score} pontos</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='rank rank{i}'>🥇 {name} — {score} acertos</div>", unsafe_allow_html=True)
 
 # =====================================================
 # INTERFACE MODERADOR
 # =====================================================
 def page_moderator():
-    st.title("🧭 Painel do Moderador — Bingo Humano")
+    st.title(f"🧭 Painel do Moderador — Bingo Humano (v{VERSION})")
+    st.caption(f"Versão do código: {VERSION}")
 
     pin = st.text_input("PIN do moderador", type="password")
     if pin != MOD_PIN:
@@ -338,20 +334,23 @@ def page_moderator():
     """, conn)
     st.dataframe(df_players, use_container_width=True)
 
-    st.subheader("🎯 Jogadores e Respostas Dadas (Engajamento)")
+    st.subheader("🎯 Jogadores e Respostas Dadas (Engajamento e Acertos)")
     df_guesses = pd.read_sql_query("""
-        SELECT p.name AS Jogador, COUNT(g.id) AS Respostas
+        SELECT p.name AS Jogador,
+               COUNT(g.id) AS Respostas,
+               SUM(CASE WHEN g.guessed_player_id = f.player_id THEN 1 ELSE 0 END) AS Corretas
         FROM players p
         LEFT JOIN guesses g ON p.id = g.guesser_id
+        LEFT JOIN facts f ON g.fact_id = f.id
         GROUP BY p.id
-        ORDER BY Respostas DESC, p.name
+        ORDER BY Corretas DESC, Respostas DESC, p.name
     """, conn)
     st.dataframe(df_guesses, use_container_width=True)
 
-    st.subheader("🏆 Ranking Top 5")
+    st.subheader("🏆 Ranking Top 5 (por acertos)")
     data = leaderboard()
     for i, (name, score) in enumerate(data, start=1):
-        st.markdown(f"<div class='rank rank{i}'>🥇 {name} — {score} pontos</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='rank rank{i}'>🥇 {name} — {score} acertos</div>", unsafe_allow_html=True)
 
 # =====================================================
 # MAIN
