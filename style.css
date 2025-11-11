@@ -1,0 +1,86 @@
+/* ======== Estilos gerais ======== */
+body {
+  background-color: #f7f9fb;
+  color: #222;
+  font-family: "Inter", sans-serif;
+}
+
+/* ======== Cartões de curiosidades ======== */
+.card {
+  border-radius: 12px;
+  padding: 18px 16px;
+  margin-bottom: 14px;
+  background: #eef3f8;  /* Azul-claro suave */
+  color: #222;
+  border: 1px solid #cdd7e0;
+  box-shadow: 1px 1px 6px rgba(0,0,0,0.05);
+  transition: all 0.25s ease-in-out;
+}
+
+.card:hover {
+  transform: scale(1.01);
+  border-color: #007bff;
+  background: #e3edf7;
+}
+
+/* ======== Cartões respondidos ======== */
+.card.answered {
+  background: #d1f0d1;       /* Verde suave indicando "respondido" */
+  border: 1px solid #77cc77;
+  color: #1b3d1b;
+  opacity: 0.9;
+  box-shadow: 0 0 8px rgba(34,139,34,0.15);
+}
+
+/* ======== Banner do início ======== */
+.banner {
+  background: linear-gradient(90deg, #007bff, #00b4d8);
+  color: white;
+  padding: 22px;
+  border-radius: 10px;
+  text-align: center;
+  margin-bottom: 20px;
+  font-weight: 600;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.85; }
+  100% { opacity: 1; }
+}
+
+/* ======== Ranking ======== */
+.rank1 {
+  background: #ffeb3b;
+  padding: 10px;
+  border-radius: 8px;
+  font-weight: bold;
+  color: #333;
+  margin-top: 8px;
+}
+.rank2, .rank3, .rank4, .rank5 {
+  background: #f1f1f1;
+  padding: 8px;
+  border-radius: 8px;
+  margin-top: 6px;
+}
+
+/* ======== Botões ======== */
+button[kind="primary"] {
+  background: linear-gradient(90deg, #007bff, #0096c7);
+  border: none;
+  color: white;
+  font-weight: 600;
+  transition: transform 0.2s ease-in-out;
+}
+button[kind="primary"]:hover {
+  transform: scale(1.02);
+}
+
+/* ======== Ajuste mobile ======== */
+@media (max-width: 768px) {
+  .card {
+    padding: 14px 12px;
+    font-size: 0.95em;
+  }
+}
