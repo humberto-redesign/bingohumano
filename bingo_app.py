@@ -11,7 +11,7 @@ import pandas as pd
 DB_PATH = "bingo.db"
 APP_TITLE = "RDN Integração"
 MOD_PIN = st.secrets.get("MOD_PIN", "1234")
-VERSION = "3.0.7"
+VERSION = "3.0.8"
 
 # =====================================================
 # BANCO DE DADOS
@@ -269,12 +269,6 @@ def page_player():
         cur = conn.execute("SELECT fact_id FROM guesses WHERE guesser_id=?", (pid,))
         answered = {row[0] for row in cur.fetchall()}
 
-        try:
-            with open("style.css") as f:
-                st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-        except FileNotFoundError:
-            st.warning("⚠️ Arquivo de estilo não encontrado (style.css).")
-
         for fact_id, fact_text, _ in facts:
             answered_flag = fact_id in answered
             card_class = "card answered" if answered_flag else "card"
@@ -291,7 +285,7 @@ def page_player():
                 st.rerun()
 
 # =====================================================
-# INTERFACE MODERADOR
+# INTERFACE MODERADOR RESTAURADA COMPLETA
 # =====================================================
 def page_moderator():
     st.title(f"🧭 Painel do Moderador — RDN Integração (v{VERSION})")
@@ -331,6 +325,44 @@ def page_moderator():
             conn.commit()
             st.warning("Banco limpo.")
             st.rerun()
+
+    conn = get_conn()
+    total_players = conn.execute("SELECT COUNT(*) FROM players").fetchone()[0]
+    total_facts = conn.execute("SELECT COUNT(*) FROM facts").fetchone()[0]
+    total_guesses = conn.execute("SELECT COUNT(*) FROM guesses").fetchone()[0]
+
+    colA, colB, colC = st.columns(3)
+    colA.metric("Participantes", total_players)
+    colB.metric("Curiosidades", total_facts)
+    colC.metric("Respostas", total_guesses)
+
+    st.subheader("📋 Jogadores e Curiosidades Cadastradas")
+    df_players = pd.read_sql_query("""
+        SELECT p.name AS Jogador, COUNT(f.id) AS Curiosidades
+        FROM players p
+        LEFT JOIN facts f ON p.id = f.player_id
+        GROUP BY p.id
+        ORDER BY p.name
+    """, conn)
+    st.dataframe(df_players, use_container_width=True)
+
+    st.subheader("🎯 Jogadores e Respostas Dadas (Engajamento e Acertos)")
+    df_guesses = pd.read_sql_query("""
+        SELECT p.name AS Jogador,
+               COUNT(g.id) AS Respostas,
+               SUM(CASE WHEN g.guessed_player_id = f.player_id THEN 1 ELSE 0 END) AS Corretas
+        FROM players p
+        LEFT JOIN guesses g ON p.id = g.guesser_id
+        LEFT JOIN facts f ON g.fact_id = f.id
+        GROUP BY p.id
+        ORDER BY Corretas DESC, Respostas DESC, p.name
+    """, conn)
+    st.dataframe(df_guesses, use_container_width=True)
+
+    st.subheader("🏆 Ranking Top 5 (por acertos)")
+    data = leaderboard()
+    for i, (name, score) in enumerate(data, start=1):
+        st.markdown(f"<div class='rank rank{i}'>🥇 {name} — {score} acertos</div>", unsafe_allow_html=True)
 
 # =====================================================
 # MAIN
