@@ -274,7 +274,7 @@ def page_moderator():
             st.rerun()
     with col3:
         if st.button("🔄 Atualizar métricas"):
-            st.experimental_rerun()
+            st.rerun()
     with col4:
         if st.button("🧹 Resetar tudo"):
             conn = get_conn()
