@@ -18,7 +18,7 @@ MOD_PIN = st.secrets.get("MOD_PIN", "1234")
 def get_conn():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA busy_timeout=5000;")  # espera até 5s por lock
+    conn.execute("PRAGMA busy_timeout=5000;")
     return conn
 
 
@@ -101,30 +101,45 @@ def list_other_players(player_id):
     return cur.fetchall()
 
 
-@st.cache_data(ttl=3)
+# =====================================================
+# LISTAGEM INTELIGENTE DE CURIOSIDADES (dinâmica)
+# =====================================================
 def list_all_facts_excluding_self(player_id):
     conn = get_conn()
-    cur = conn.execute("""
-        SELECT f.id, f.text, f.player_id
-        FROM facts f
-        WHERE f.player_id != ?
-    """, (player_id,))
-    facts = cur.fetchall()
-    if "facts_order" not in st.session_state:
+    total_facts = conn.execute("SELECT COUNT(*) FROM facts").fetchone()[0]
+
+    # Se o total mudou, recarrega
+    if "facts_cache" not in st.session_state or st.session_state.get("facts_total") != total_facts:
+        cur = conn.execute("""
+            SELECT f.id, f.text, f.player_id
+            FROM facts f
+            WHERE f.player_id != ?
+        """, (player_id,))
+        facts = cur.fetchall()
         random.shuffle(facts)
+        st.session_state["facts_cache"] = facts
+        st.session_state["facts_total"] = total_facts
         st.session_state["facts_order"] = [f[0] for f in facts]
     else:
-        facts = sorted(facts, key=lambda x: st.session_state["facts_order"].index(x[0]))
+        facts = st.session_state["facts_cache"]
+
+    facts = sorted(facts, key=lambda x: st.session_state["facts_order"].index(x[0]))
     return facts
 
 
 # =====================================================
-# NOVO: Função robusta de gravação de respostas
+# REGISTRO DE RESPOSTAS (robusto)
 # =====================================================
 def register_guess(guesser_id, fact_id, guessed_player_id):
     now = datetime.utcnow().isoformat()
     conn = get_conn()
     try:
+        # Valida se o fact ainda existe
+        cur = conn.execute("SELECT COUNT(*) FROM facts WHERE id=?", (fact_id,))
+        if cur.fetchone()[0] == 0:
+            st.warning("Essa curiosidade não existe mais (jogo atualizado). Recarregue a página.")
+            return
+
         cur = conn.execute(
             "SELECT id FROM guesses WHERE guesser_id=? AND fact_id=?",
             (guesser_id, fact_id)
@@ -140,8 +155,8 @@ def register_guess(guesser_id, fact_id, guessed_player_id):
                 (guesser_id, fact_id, guessed_player_id, now)
             )
         conn.commit()
-    except sqlite3.OperationalError as e:
-        st.error(f"⚠️ O banco está ocupado, tente novamente em alguns segundos.")
+    except sqlite3.OperationalError:
+        st.error("⚠️ O banco está ocupado, tente novamente em alguns segundos.")
     except Exception as e:
         st.error(f"Erro ao registrar resposta: {e}")
 
