@@ -11,7 +11,7 @@ import pandas as pd
 DB_PATH = "bingo.db"
 APP_TITLE = "RDN Integração"
 MOD_PIN = st.secrets.get("MOD_PIN", "1234")
-VERSION = "3.0.6"
+VERSION = "3.0.7"
 
 # =====================================================
 # BANCO DE DADOS
@@ -183,12 +183,27 @@ def page_player():
     started = get_setting("started", "0") == "1"
     finished = get_setting("finished", "0") == "1"
 
-    # -------- Encerramento do jogo --------
-    if finished:
+    # --- Verificação de banco vazio ---
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM players")
+    players_count = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM facts")
+    facts_count = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM guesses")
+    guesses_count = cur.fetchone()[0]
+
+    if finished and (players_count == 0 and facts_count == 0 and guesses_count == 0):
+        set_setting("finished", "0")
+        set_setting("started", "0")
+        st.session_state.clear()
+        st.experimental_rerun()
+
+    elif finished:
         st.warning("⛔ O jogo foi encerrado pelo moderador.")
         st.stop()
 
-    # -------- Cadastro inicial --------
+    # --- Cadastro inicial ---
     if st.session_state["player_id"] is None:
         with st.form("frm_name"):
             name = st.text_input("Digite seu nome completo")
@@ -207,7 +222,7 @@ def page_player():
         st.stop()
     pid = st.session_state["player_id"]
 
-    # -------- Cadastro das curiosidades --------
+    # --- Cadastro das curiosidades ---
     if not st.session_state["facts_loaded"]:
         st.info("✍️ Cadastre 3 curiosidades sobre você.")
         with st.form("frm_facts"):
@@ -228,13 +243,13 @@ def page_player():
                     st.rerun()
         st.stop()
 
-    # -------- Espera pelo início --------
+    # --- Espera pelo início ---
     if not started and st.session_state["facts_loaded"]:
         st.info("⏳ Aguardando o moderador iniciar o jogo...")
         time.sleep(5)
         st.rerun()
 
-    # -------- Jogo em andamento --------
+    # --- Jogo em andamento ---
     if started and not st.session_state["ready_to_play"]:
         st.markdown("<div class='banner'>🚀 O moderador iniciou o jogo! Clique abaixo para começar.</div>", unsafe_allow_html=True)
         if st.button("🎯 Iniciar o Jogo!", use_container_width=True):
