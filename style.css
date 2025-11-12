@@ -1,71 +1,113 @@
 /* ==========================
-   ESTILOS GERAIS
+   ESTILOS GERAIS - DARK THEME
    ========================== */
 body, .stApp {
-  background-color: #f8f9fa !important;
+  background-color: #121212 !important;   /* Fundo preto/cinza carvão */
+  color: #eaeaea !important;               /* Texto claro */
   font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  color: #222;
+}
+
+/* Corrige blocos e containers brancos do Streamlit */
+div[data-testid="stHorizontalBlock"],
+div[data-testid="stVerticalBlock"],
+div[data-testid="stForm"] {
+  background-color: transparent !important;
+  color: #eaeaea !important;
 }
 
 /* ==========================
    CARTÕES DE CURIOSIDADES
    ========================== */
 .card {
-  background-color: #ffffff;
-  border: 2px solid #e0e0e0;
+  background-color: #1e1e1e;
+  border: 1.5px solid #333;
   border-radius: 10px;
   padding: 12px 18px;
   margin: 10px 0;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-  transition: all 0.25s ease-in-out;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  transition: all 0.3s ease-in-out;
+  color: #f0f0f0;
 }
 
 .card:hover {
-  border-color: #007bff;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+  border-color: #00bcd4;
+  box-shadow: 0 0 10px rgba(0,188,212,0.4);
 }
 
-/* Cartão respondido (verde leve com pulse) */
+/* Cartão respondido (verde com efeito pulse) */
 .card.answered {
-  background-color: #e8f8ec;
-  border: 2px solid #2ecc71;
-  color: #1b5e20;
-  box-shadow: 0 3px 6px rgba(46, 204, 113, 0.25);
+  background-color: #173d1f;
+  border: 1.5px solid #2ecc71;
+  color: #d5ffd5;
+  box-shadow: 0 0 12px rgba(46, 204, 113, 0.5);
   transform: scale(1.01);
-  animation: pulse 1s ease-out 1;
+  animation: pulse 1.2s ease-out 1;
 }
 
-/* Animação pulse (leve destaque ao confirmar) */
+/* Animação pulse (leve brilho) */
 @keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.6); }
-  70% { box-shadow: 0 0 0 10px rgba(46, 204, 113, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
+  0%   { box-shadow: 0 0 0 0 rgba(46,204,113,0.8); }
+  70%  { box-shadow: 0 0 0 12px rgba(46,204,113,0); }
+  100% { box-shadow: 0 0 0 0 rgba(46,204,113,0); }
 }
 
 /* ==========================
-   ELEMENTOS DE TEXTO E DROPDOWN
+   DROPDOWNS E FORM INPUTS
    ========================== */
 .stSelectbox label {
   font-weight: 500;
-  color: #444;
+  color: #cccccc !important;
 }
 
 .stSelectbox div[data-baseweb="select"] {
+  background-color: #1c1c1c !important;
+  color: #e0e0e0 !important;
   border-radius: 8px !important;
-  border: 1.5px solid #bbb !important;
+  border: 1.5px solid #555 !important;
 }
 
 .stSelectbox div[data-baseweb="select"]:focus-within {
   border-color: #2ecc71 !important;
-  box-shadow: 0 0 5px rgba(46, 204, 113, 0.3);
+  box-shadow: 0 0 6px rgba(46,204,113,0.4);
 }
 
 /* ==========================
-   ALERTAS E MENSAGENS
+   ALERTAS, MENSAGENS E BANNERS
    ========================== */
 div[data-testid="stNotification"] {
   border-radius: 8px !important;
-  padding: 10px 15px !important;
+  background-color: #1e1e1e !important;
+  color: #eaeaea !important;
+  border: 1px solid #333 !important;
+}
+
+.banner {
+  background: linear-gradient(90deg, #00bcd4 0%, #2ecc71 100%);
+  color: white;
+  padding: 12px;
+  border-radius: 10px;
+  text-align: center;
+  margin-bottom: 15px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+/* ==========================
+   TABELAS E DADOS
+   ========================== */
+.dataframe {
+  background-color: #181818 !important;
+  color: #eaeaea !important;
+  border: 1px solid #333 !important;
+}
+
+thead tr th {
+  background-color: #202020 !important;
+  color: #00bcd4 !important;
+}
+
+tbody tr:nth-child(even) {
+  background-color: #1a1a1a !important;
 }
 
 /* ==========================
@@ -76,26 +118,61 @@ div[data-testid="stNotification"] {
   border-radius: 8px;
   margin: 6px 0;
   font-weight: 600;
+  color: #fff;
 }
 
 .rank1 { background-color: #ffd70033; border: 2px solid #ffbf00; }
 .rank2 { background-color: #c0c0c033; border: 2px solid #bdbdbd; }
 .rank3 { background-color: #cd7f3233; border: 2px solid #cd7f32; }
-
 .rank4, .rank5 {
-  background-color: #e9ecef;
-  border: 1.5px solid #ccc;
+  background-color: #2a2a2a;
+  border: 1.5px solid #666;
 }
 
 /* ==========================
-   BANNERS E CABEÇALHOS
+   BOTÕES E CAMPOS
    ========================== */
-.banner {
-  background: linear-gradient(90deg, #007bff 0%, #00c6ff 100%);
-  color: white;
-  padding: 12px;
+button, .stButton button {
+  background-color: #2ecc71 !important;
+  color: #111 !important;
+  border: none !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease-in-out;
+}
+
+button:hover, .stButton button:hover {
+  background-color: #27ae60 !important;
+  color: #fff !important;
+}
+
+/* ==========================
+   INPUTS DE TEXTO
+   ========================== */
+input[type="text"], textarea {
+  background-color: #1e1e1e !important;
+  color: #eaeaea !important;
+  border: 1.5px solid #555 !important;
+  border-radius: 8px !important;
+}
+
+input[type="text"]:focus, textarea:focus {
+  border-color: #2ecc71 !important;
+  box-shadow: 0 0 5px rgba(46,204,113,0.4);
+}
+
+/* ==========================
+   SCROLLBAR PERSONALIZADO
+   ========================== */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #2ecc71;
   border-radius: 10px;
-  text-align: center;
-  margin-bottom: 15px;
-  font-weight: 600;
+}
+
+::-webkit-scrollbar-track {
+  background: #1c1c1c;
 }
