@@ -11,7 +11,7 @@ import pandas as pd
 DB_PATH = "bingo.db"
 APP_TITLE = "RDN Integração"
 MOD_PIN = st.secrets.get("MOD_PIN", "1234")
-VERSION = "3.1.2"
+VERSION = "3.2.0"
 
 # =====================================================
 # BANCO DE DADOS
@@ -55,12 +55,11 @@ def init_db():
 # FUNÇÕES AUXILIARES
 # =====================================================
 def load_css():
-    """Carrega o estilo global do arquivo style.css"""
     try:
         with open("style.css") as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
     except FileNotFoundError:
-        st.warning("⚠️ Arquivo style.css não encontrado. Verifique se ele está na mesma pasta do app.")
+        st.warning("⚠️ Arquivo style.css não encontrado.")
 
 def set_setting(key, value):
     conn = get_conn()
@@ -173,6 +172,7 @@ def page_player():
     st.session_state.setdefault("player_id", None)
     st.session_state.setdefault("facts_loaded", False)
     st.session_state.setdefault("ready_to_play", False)
+    st.session_state.setdefault("page", 1)
 
     if st.session_state.get("player_name"):
         st.markdown(f"**👤 Jogador:** {st.session_state['player_name']}")
@@ -258,9 +258,16 @@ def page_player():
         cur = conn.execute("SELECT fact_id FROM guesses WHERE guesser_id=?", (pid,))
         answered = {row[0] for row in cur.fetchall()}
 
-        rerun_needed = False  # flag
+        items_per_page = 20
+        total_pages = max(1, (len(facts) + items_per_page - 1) // items_per_page)
+        page = st.session_state.get("page", 1)
+        start = (page - 1) * items_per_page
+        end = start + items_per_page
+        facts_page = facts[start:end]
 
-        for fact_id, fact_text, _ in facts:
+        rerun_needed = False
+
+        for fact_id, fact_text, _ in facts_page:
             answered_flag = st.session_state.get(f"answered_{fact_id}", fact_id in answered)
             card_class = "card answered" if answered_flag else "card"
             st.markdown(f"<div class='{card_class}'><b>{fact_text}</b></div>", unsafe_allow_html=True)
@@ -277,6 +284,18 @@ def page_player():
                 register_guess(pid, fact_id, name_to_id[guess_name])
                 rerun_needed = True
 
+        col_prev, col_page, col_next = st.columns([1, 2, 1])
+        with col_prev:
+            if st.button("⬅️ Anterior") and page > 1:
+                st.session_state["page"] -= 1
+                st.rerun()
+        with col_page:
+            st.markdown(f"<div style='text-align:center;'>Página {page} de {total_pages}</div>", unsafe_allow_html=True)
+        with col_next:
+            if st.button("➡️ Próxima") and page < total_pages:
+                st.session_state["page"] += 1
+                st.rerun()
+
         if rerun_needed:
             st.rerun()
 
@@ -286,7 +305,6 @@ def page_player():
 def page_moderator():
     st.title(f"🧭 Painel do Moderador — RDN Integração (v{VERSION})")
     st.caption(f"Versão do código: {VERSION}")
-
     pin = st.text_input("PIN do moderador", type="password")
     if pin != MOD_PIN:
         st.info("Digite o PIN para acessar o painel.")
@@ -363,7 +381,7 @@ def page_moderator():
 # =====================================================
 def main():
     st.set_page_config(page_title=APP_TITLE, page_icon="🎯")
-    load_css()  # 🔹 Aplica o style.css externo
+    load_css()
     init_db()
     params = st.query_params
     mode = params["mode"].lower() if "mode" in params else "player"
