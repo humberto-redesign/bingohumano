@@ -11,7 +11,7 @@ import pandas as pd
 DB_PATH = "bingo.db"
 APP_TITLE = "RDN Integração"
 MOD_PIN = st.secrets.get("MOD_PIN", "1234")
-VERSION = "3.0.9"
+VERSION = "3.1.0"
 
 # =====================================================
 # BANCO DE DADOS
@@ -52,8 +52,16 @@ def init_db():
     conn.commit()
 
 # =====================================================
-# CONFIGURAÇÕES GERAIS
+# FUNÇÕES AUXILIARES
 # =====================================================
+def load_css():
+    """Carrega o estilo global do arquivo style.css"""
+    try:
+        with open("style.css") as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.warning("⚠️ Arquivo style.css não encontrado. Verifique se ele está na mesma pasta do app.")
+
 def set_setting(key, value):
     conn = get_conn()
     conn.execute(
@@ -95,9 +103,6 @@ def list_other_players(player_id):
     cur = conn.execute("SELECT id, name FROM players WHERE id != ? ORDER BY name", (player_id,))
     return cur.fetchall()
 
-# =====================================================
-# LISTAGEM INTELIGENTE DE CURIOSIDADES
-# =====================================================
 def list_all_facts_excluding_self(player_id):
     conn = get_conn()
     total_facts = conn.execute("SELECT COUNT(*) FROM facts").fetchone()[0]
@@ -117,9 +122,6 @@ def list_all_facts_excluding_self(player_id):
     facts = sorted(facts, key=lambda x: st.session_state["facts_order"].index(x[0]))
     return facts
 
-# =====================================================
-# REGISTRO DE RESPOSTAS (robusto)
-# =====================================================
 def register_guess(guesser_id, fact_id, guessed_player_id):
     now = datetime.utcnow().isoformat()
     conn = get_conn()
@@ -143,14 +145,9 @@ def register_guess(guesser_id, fact_id, guessed_player_id):
                 (guesser_id, fact_id, guessed_player_id, now)
             )
         conn.commit()
-    except sqlite3.OperationalError:
-        st.error("⚠️ O banco está ocupado, tente novamente em alguns segundos.")
     except Exception as e:
         st.error(f"Erro ao registrar resposta: {e}")
 
-# =====================================================
-# RANKING (por acertos)
-# =====================================================
 def leaderboard(limit=5):
     conn = get_conn()
     cur = conn.execute("""
@@ -166,7 +163,7 @@ def leaderboard(limit=5):
     return cur.fetchall()
 
 # =====================================================
-# INTERFACE JOGADOR
+# TELA DO JOGADOR
 # =====================================================
 def page_player():
     st.title("🎯 RDN Integração")
@@ -183,7 +180,6 @@ def page_player():
     started = get_setting("started", "0") == "1"
     finished = get_setting("finished", "0") == "1"
 
-    # --- Verificação de banco vazio ---
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM players")
@@ -202,7 +198,6 @@ def page_player():
         st.warning("⛔ O jogo foi encerrado pelo moderador.")
         st.stop()
 
-    # --- Cadastro inicial ---
     if st.session_state["player_id"] is None:
         with st.form("frm_name"):
             name = st.text_input("Digite seu nome completo")
@@ -221,7 +216,6 @@ def page_player():
         st.stop()
     pid = st.session_state["player_id"]
 
-    # --- Cadastro das curiosidades ---
     if not st.session_state["facts_loaded"]:
         st.info("✍️ Cadastre 3 curiosidades sobre você.")
         with st.form("frm_facts"):
@@ -236,24 +230,20 @@ def page_player():
                 st.success("✅ Frases salvas!")
                 if started:
                     st.session_state["ready_to_play"] = True
-                    st.toast("O jogo já está em andamento! Boa sorte 🎯")
                     st.rerun()
                 else:
                     st.rerun()
         st.stop()
 
-    # --- Espera pelo início ---
     if not started and st.session_state["facts_loaded"]:
         st.info("⏳ Aguardando o moderador iniciar o jogo...")
         time.sleep(5)
         st.rerun()
 
-    # --- Jogo em andamento ---
     if started and not st.session_state["ready_to_play"]:
         st.markdown("<div class='banner'>🚀 O moderador iniciou o jogo! Clique abaixo para começar.</div>", unsafe_allow_html=True)
         if st.button("🎯 Iniciar o Jogo!", use_container_width=True):
             st.session_state["ready_to_play"] = True
-            st.toast("Boa sorte! O jogo começou 🎉")
             st.rerun()
         st.stop()
 
@@ -277,7 +267,7 @@ def page_player():
                 "Quem é essa pessoa?",
                 [""] + names,
                 key=f"guess_{fact_id}",
-                index=0 if f"guess_{fact_id}" not in st.session_state else names.index(st.session_state[f"guess_{fact_id}"]) + 1 if st.session_state[f"guess_{fact_id}"] in names else 0
+                index=0
             )
 
             if guess_name:
@@ -285,7 +275,7 @@ def page_player():
                 register_guess(pid, fact_id, name_to_id[guess_name])
 
 # =====================================================
-# INTERFACE MODERADOR
+# TELA DO MODERADOR
 # =====================================================
 def page_moderator():
     st.title(f"🧭 Painel do Moderador — RDN Integração (v{VERSION})")
@@ -305,7 +295,6 @@ def page_moderator():
             if st.button("🚀 Iniciar jogo"):
                 set_setting("started", "1")
                 set_setting("finished", "0")
-                st.toast("O jogo foi iniciado!")
                 st.rerun()
         else:
             st.success("🟢 Jogo em andamento")
@@ -369,6 +358,7 @@ def page_moderator():
 # =====================================================
 def main():
     st.set_page_config(page_title=APP_TITLE, page_icon="🎯")
+    load_css()  # 🔹 Carrega estilo externo
     init_db()
     params = st.query_params
     mode = params["mode"].lower() if "mode" in params else "player"

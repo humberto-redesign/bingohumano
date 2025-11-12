@@ -25,13 +25,21 @@ body, .stApp {
   box-shadow: 0 4px 10px rgba(0,0,0,0.08);
 }
 
-/* Cartão respondido (verde leve) */
+/* Cartão respondido (verde leve com pulse) */
 .card.answered {
-  background-color: #e8f8ec;        /* verde suave */
-  border: 2px solid #2ecc71;        /* verde mais intenso */
-  color: #1b5e20;                   /* texto escuro para contraste */
+  background-color: #e8f8ec;
+  border: 2px solid #2ecc71;
+  color: #1b5e20;
   box-shadow: 0 3px 6px rgba(46, 204, 113, 0.25);
   transform: scale(1.01);
+  animation: pulse 1s ease-out 1;
+}
+
+/* Animação pulse (leve destaque ao confirmar) */
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.6); }
+  70% { box-shadow: 0 0 0 10px rgba(46, 204, 113, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
 }
 
 /* ==========================
