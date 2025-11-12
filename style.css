@@ -1,86 +1,93 @@
-/* ======== Estilos gerais ======== */
-body {
-  background-color: #f7f9fb;
+/* ==========================
+   ESTILOS GERAIS
+   ========================== */
+body, .stApp {
+  background-color: #f8f9fa !important;
+  font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: #222;
-  font-family: "Inter", sans-serif;
 }
 
-/* ======== Cartões de curiosidades ======== */
+/* ==========================
+   CARTÕES DE CURIOSIDADES
+   ========================== */
 .card {
-  border-radius: 12px;
-  padding: 18px 16px;
-  margin-bottom: 14px;
-  background: #eef3f8;  /* Azul-claro suave */
-  color: #222;
-  border: 1px solid #cdd7e0;
-  box-shadow: 1px 1px 6px rgba(0,0,0,0.05);
+  background-color: #ffffff;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  padding: 12px 18px;
+  margin: 10px 0;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
   transition: all 0.25s ease-in-out;
 }
 
 .card:hover {
-  transform: scale(1.01);
   border-color: #007bff;
-  background: #e3edf7;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.08);
 }
 
-/* ======== Cartões respondidos ======== */
+/* Cartão respondido (verde leve) */
 .card.answered {
-  background: #d1f0d1;       /* Verde suave indicando "respondido" */
-  border: 1px solid #77cc77;
-  color: #1b3d1b;
-  opacity: 0.9;
-  box-shadow: 0 0 8px rgba(34,139,34,0.15);
+  background-color: #e8f8ec;        /* verde suave */
+  border: 2px solid #2ecc71;        /* verde mais intenso */
+  color: #1b5e20;                   /* texto escuro para contraste */
+  box-shadow: 0 3px 6px rgba(46, 204, 113, 0.25);
+  transform: scale(1.01);
 }
 
-/* ======== Banner do início ======== */
+/* ==========================
+   ELEMENTOS DE TEXTO E DROPDOWN
+   ========================== */
+.stSelectbox label {
+  font-weight: 500;
+  color: #444;
+}
+
+.stSelectbox div[data-baseweb="select"] {
+  border-radius: 8px !important;
+  border: 1.5px solid #bbb !important;
+}
+
+.stSelectbox div[data-baseweb="select"]:focus-within {
+  border-color: #2ecc71 !important;
+  box-shadow: 0 0 5px rgba(46, 204, 113, 0.3);
+}
+
+/* ==========================
+   ALERTAS E MENSAGENS
+   ========================== */
+div[data-testid="stNotification"] {
+  border-radius: 8px !important;
+  padding: 10px 15px !important;
+}
+
+/* ==========================
+   RANKINGS E MÉTRICAS
+   ========================== */
+.rank {
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin: 6px 0;
+  font-weight: 600;
+}
+
+.rank1 { background-color: #ffd70033; border: 2px solid #ffbf00; }
+.rank2 { background-color: #c0c0c033; border: 2px solid #bdbdbd; }
+.rank3 { background-color: #cd7f3233; border: 2px solid #cd7f32; }
+
+.rank4, .rank5 {
+  background-color: #e9ecef;
+  border: 1.5px solid #ccc;
+}
+
+/* ==========================
+   BANNERS E CABEÇALHOS
+   ========================== */
 .banner {
-  background: linear-gradient(90deg, #007bff, #00b4d8);
+  background: linear-gradient(90deg, #007bff 0%, #00c6ff 100%);
   color: white;
-  padding: 22px;
+  padding: 12px;
   border-radius: 10px;
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: 15px;
   font-weight: 600;
-  animation: pulse 2s infinite;
-}
-@keyframes pulse {
-  0% { opacity: 1; }
-  50% { opacity: 0.85; }
-  100% { opacity: 1; }
-}
-
-/* ======== Ranking ======== */
-.rank1 {
-  background: #ffeb3b;
-  padding: 10px;
-  border-radius: 8px;
-  font-weight: bold;
-  color: #333;
-  margin-top: 8px;
-}
-.rank2, .rank3, .rank4, .rank5 {
-  background: #f1f1f1;
-  padding: 8px;
-  border-radius: 8px;
-  margin-top: 6px;
-}
-
-/* ======== Botões ======== */
-button[kind="primary"] {
-  background: linear-gradient(90deg, #007bff, #0096c7);
-  border: none;
-  color: white;
-  font-weight: 600;
-  transition: transform 0.2s ease-in-out;
-}
-button[kind="primary"]:hover {
-  transform: scale(1.02);
-}
-
-/* ======== Ajuste mobile ======== */
-@media (max-width: 768px) {
-  .card {
-    padding: 14px 12px;
-    font-size: 0.95em;
-  }
 }
