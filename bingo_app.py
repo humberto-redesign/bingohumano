@@ -251,6 +251,7 @@ def page_player():
         st.success("🟢 O jogo está em andamento!")
         facts = list_all_facts_excluding_self(pid)
         others = list_other_players(pid)
+        others = sorted(others, key=lambda x: x[1].lower())
         names = [n for _, n in others]
         name_to_id = {n: i for i, n in others}
 
