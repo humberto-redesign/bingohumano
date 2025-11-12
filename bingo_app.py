@@ -11,7 +11,7 @@ import pandas as pd
 DB_PATH = "bingo.db"
 APP_TITLE = "RDN Integração"
 MOD_PIN = st.secrets.get("MOD_PIN", "1234")
-VERSION = "3.0.8"
+VERSION = "3.0.9"
 
 # =====================================================
 # BANCO DE DADOS
@@ -198,7 +198,6 @@ def page_player():
         set_setting("started", "0")
         st.session_state.clear()
         st.experimental_rerun()
-
     elif finished:
         st.warning("⛔ O jogo foi encerrado pelo moderador.")
         st.stop()
@@ -270,22 +269,23 @@ def page_player():
         answered = {row[0] for row in cur.fetchall()}
 
         for fact_id, fact_text, _ in facts:
-            answered_flag = fact_id in answered
+            answered_flag = st.session_state.get(f"answered_{fact_id}", fact_id in answered)
             card_class = "card answered" if answered_flag else "card"
             st.markdown(f"<div class='{card_class}'><b>{fact_text}</b></div>", unsafe_allow_html=True)
-            with st.form(f"frm_{fact_id}"):
-                guess_name = st.selectbox("Quem é essa pessoa?", [""] + names, key=f"guess_{fact_id}")
-                submit = st.form_submit_button("Confirmar resposta")
-            if submit:
-                if not guess_name:
-                    st.warning("Selecione um nome para confirmar.")
-                    st.stop()
+
+            guess_name = st.selectbox(
+                "Quem é essa pessoa?",
+                [""] + names,
+                key=f"guess_{fact_id}",
+                index=0 if f"guess_{fact_id}" not in st.session_state else names.index(st.session_state[f"guess_{fact_id}"]) + 1 if st.session_state[f"guess_{fact_id}"] in names else 0
+            )
+
+            if guess_name:
+                st.session_state[f"answered_{fact_id}"] = True
                 register_guess(pid, fact_id, name_to_id[guess_name])
-                st.toast("Resposta registrada! 👏")
-                st.rerun()
 
 # =====================================================
-# INTERFACE MODERADOR RESTAURADA COMPLETA
+# INTERFACE MODERADOR
 # =====================================================
 def page_moderator():
     st.title(f"🧭 Painel do Moderador — RDN Integração (v{VERSION})")
