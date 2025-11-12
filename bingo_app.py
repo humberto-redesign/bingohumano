@@ -11,7 +11,7 @@ import pandas as pd
 DB_PATH = "bingo.db"
 APP_TITLE = "RDN Integração"
 MOD_PIN = st.secrets.get("MOD_PIN", "1234")
-VERSION = "3.1.1"
+VERSION = "3.1.2"
 
 # =====================================================
 # BANCO DE DADOS
@@ -258,6 +258,8 @@ def page_player():
         cur = conn.execute("SELECT fact_id FROM guesses WHERE guesser_id=?", (pid,))
         answered = {row[0] for row in cur.fetchall()}
 
+        rerun_needed = False  # flag
+
         for fact_id, fact_text, _ in facts:
             answered_flag = st.session_state.get(f"answered_{fact_id}", fact_id in answered)
             card_class = "card answered" if answered_flag else "card"
@@ -273,7 +275,10 @@ def page_player():
             if guess_name:
                 st.session_state[f"answered_{fact_id}"] = True
                 register_guess(pid, fact_id, name_to_id[guess_name])
-                st.rerun()  # 🔹 Força atualização imediata da cor do card
+                rerun_needed = True
+
+        if rerun_needed:
+            st.rerun()
 
 # =====================================================
 # TELA DO MODERADOR
@@ -288,7 +293,6 @@ def page_moderator():
         st.stop()
 
     started = get_setting("started", "0") == "1"
-    finished = get_setting("finished", "0") == "1"
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -359,7 +363,7 @@ def page_moderator():
 # =====================================================
 def main():
     st.set_page_config(page_title=APP_TITLE, page_icon="🎯")
-    load_css()  # 🔹 Aplica o style.css
+    load_css()  # 🔹 Aplica o style.css externo
     init_db()
     params = st.query_params
     mode = params["mode"].lower() if "mode" in params else "player"
