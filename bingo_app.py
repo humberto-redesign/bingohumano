@@ -11,7 +11,7 @@ import pandas as pd
 DB_PATH = "bingo.db"
 APP_TITLE = "RDN Integração"
 MOD_PIN = st.secrets.get("MOD_PIN", "1234")
-VERSION = "3.1.0"
+VERSION = "3.1.1"
 
 # =====================================================
 # BANCO DE DADOS
@@ -273,6 +273,7 @@ def page_player():
             if guess_name:
                 st.session_state[f"answered_{fact_id}"] = True
                 register_guess(pid, fact_id, name_to_id[guess_name])
+                st.rerun()  # 🔹 Força atualização imediata da cor do card
 
 # =====================================================
 # TELA DO MODERADOR
@@ -358,7 +359,7 @@ def page_moderator():
 # =====================================================
 def main():
     st.set_page_config(page_title=APP_TITLE, page_icon="🎯")
-    load_css()  # 🔹 Carrega estilo externo
+    load_css()  # 🔹 Aplica o style.css
     init_db()
     params = st.query_params
     mode = params["mode"].lower() if "mode" in params else "player"
